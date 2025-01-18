@@ -1,0 +1,201 @@
+import React, { useState, useEffect } from 'react';
+
+const BeachVolleyball = () => {
+  const [gameState, setGameState] = useState({
+    ball: { x: 400, y: 200, dx: 0, dy: 0 },
+    player: { x: 150, y: 400 },
+    bot: { x: 650, y: 400 },
+    playerScore: 0,
+    botScore: 0,
+    gameStarted: false
+  });
+
+  const [keys, setKeys] = useState({
+    ArrowLeft: false,
+    ArrowRight: false,
+    ArrowUp: false
+  });
+
+  // Constantes del juego
+  const GRAVITY = 0.5;
+  const JUMP_FORCE = -15;
+  const MOVE_SPEED = 5;
+  const BALL_SPEED = 8;
+  const PLAYER_WIDTH = 40;
+  const PLAYER_HEIGHT = 60;
+  const BALL_SIZE = 20;
+  const NET_HEIGHT = 150;
+  const NET_WIDTH = 10;
+
+  // Manejo de teclas
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (Object.keys(keys).includes(e.key)) {
+        setKeys(prev => ({ ...prev, [e.key]: true }));
+      }
+    };
+
+    const handleKeyUp = (e) => {
+      if (Object.keys(keys).includes(e.key)) {
+        setKeys(prev => ({ ...prev, [e.key]: false }));
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, []);
+
+  // Lógica principal del juego
+  useEffect(() => {
+    if (!gameState.gameStarted) return;
+
+    const gameLoop = setInterval(() => {
+      setGameState(prev => {
+        let newState = { ...prev };
+
+        // Movimiento del jugador
+        if (keys.ArrowLeft && prev.player.x > 0) {
+          newState.player.x -= MOVE_SPEED;
+        }
+        if (keys.ArrowRight && prev.player.x < 380) {
+          newState.player.x += MOVE_SPEED;
+        }
+
+        // Movimiento del bot
+        const botTarget = prev.ball.x > 400 ? prev.ball.x : 650;
+        newState.bot.x += (botTarget - prev.bot.x) * 0.05;
+        newState.bot.x = Math.max(420, Math.min(760, newState.bot.x));
+
+        // Física de la pelota
+        newState.ball.x += prev.ball.dx;
+        newState.ball.y += prev.ball.dy;
+        newState.ball.dy += GRAVITY;
+
+        // Rebote en el suelo
+        if (newState.ball.y > 480) {
+          // Punto anotado
+          if (newState.ball.x < 400) {
+            newState.botScore += 1;
+          } else {
+            newState.playerScore += 1;
+          }
+          // Reset de la pelota
+          newState.ball = { 
+            x: 400, 
+            y: 200, 
+            dx: Math.random() * 8 - 4, 
+            dy: -BALL_SPEED 
+          };
+        }
+
+        // Rebote en las paredes
+        if (newState.ball.x < 0 || newState.ball.x > 800) {
+          newState.ball.dx *= -1;
+        }
+
+        // Colisión con la red
+        if (Math.abs(newState.ball.x - 400) < NET_WIDTH/2 && 
+            newState.ball.y > 480 - NET_HEIGHT) {
+          newState.ball.dx *= -1;
+        }
+
+        // Colisión con jugadores
+        const checkPlayerCollision = (playerX, playerY) => {
+          const dx = newState.ball.x - playerX;
+          const dy = newState.ball.y - playerY;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+
+          if (distance < PLAYER_WIDTH) {
+            const angle = Math.atan2(dy, dx);
+            newState.ball.dx = Math.cos(angle) * BALL_SPEED;
+            newState.ball.dy = Math.sin(angle) * BALL_SPEED - 2;
+          }
+        };
+
+        checkPlayerCollision(prev.player.x, prev.player.y);
+        checkPlayerCollision(prev.bot.x, prev.bot.y);
+
+        return newState;
+      });
+    }, 1000/60);
+
+    return () => clearInterval(gameLoop);
+  }, [gameState.gameStarted, keys]);
+
+  return (
+    <div className="flex flex-col items-center">
+      <div className="mb-4 text-2xl font-bold">
+        {gameState.playerScore} - {gameState.botScore}
+      </div>
+      
+      {!gameState.gameStarted && (
+        <button
+          className="mb-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          onClick={() => setGameState(prev => ({ ...prev, gameStarted: true }))}
+        >
+          Empezar Juego
+        </button>
+      )}
+
+      <div 
+        className="relative w-800 h-500 bg-yellow-200 border-2 border-gray-400"
+        style={{ width: '800px', height: '500px' }}
+      >
+        {/* Pelota */}
+        <div
+          className="absolute w-5 h-5 bg-white rounded-full shadow-md"
+          style={{
+            left: gameState.ball.x - BALL_SIZE/2,
+            top: gameState.ball.y - BALL_SIZE/2,
+            width: BALL_SIZE,
+            height: BALL_SIZE
+          }}
+        />
+
+        {/* Red */}
+        <div
+          className="absolute bg-white"
+          style={{
+            left: 395,
+            bottom: 0,
+            width: NET_WIDTH,
+            height: NET_HEIGHT
+          }}
+        />
+
+        {/* Jugador */}
+        <div
+          className="absolute bg-blue-500"
+          style={{
+            left: gameState.player.x - PLAYER_WIDTH/2,
+            top: gameState.player.y - PLAYER_HEIGHT/2,
+            width: PLAYER_WIDTH,
+            height: PLAYER_HEIGHT
+          }}
+        />
+
+        {/* Bot */}
+        <div
+          className="absolute bg-red-500"
+          style={{
+            left: gameState.bot.x - PLAYER_WIDTH/2,
+            top: gameState.bot.y - PLAYER_HEIGHT/2,
+            width: PLAYER_WIDTH,
+            height: PLAYER_HEIGHT
+          }}
+        />
+      </div>
+
+      <div className="mt-4 text-gray-600">
+        Usa las flechas ← → para moverte
+      </div>
+    </div>
+  );
+};
+
+export default BeachVolleyball;
